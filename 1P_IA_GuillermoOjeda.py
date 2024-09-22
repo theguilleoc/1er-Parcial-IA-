@@ -125,22 +125,58 @@ plt.tight_layout()
 plt.show()
 
 
-# Crear gráfico de valores predichos vs errores residuales
-plt.figure(figsize=(8, 6))
-plt.scatter(result_df['Valor Predicho'], residuales, color='blue', alpha=0.5)
-plt.axhline(0, color='red', linestyle='--', label='Cero error')
 
-# Etiquetas y título
-plt.title('Valores Predichos vs. Errores Residuales')
-plt.xlabel('Valores Predichos')
-plt.ylabel('Errores Residuales')
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
 
-# Mostrar gráfico
-plt.show()
+# Resamplear el conjunto de datos a intervalos diarios y calcular la temperatura máxima diaria
+daily_max_temperatures = data['Temperatura'].resample('D').max()
+daily_max_humidity = data['Humedad'].resample('D').max()
 
+# Definir características (features): temperatura y humedad
+X = pd.DataFrame({
+    'Temperatura': daily_max_temperatures.values[:-1],
+    'Humedad': daily_max_humidity.values[:-1]
+})
+
+# Variable objetivo (target)
+y = salida.values[:-1]
+
+# Normalizar las características
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Dividir los datos en conjuntos de entrenamiento y validación
+train_indices = (daily_max_temperatures.index.year <= 2020)[:-1]
+val_indices = (daily_max_temperatures.index.year == 2021)[:-1]
+
+X_train, X_val = X_scaled[train_indices], X_scaled[val_indices]
+y_train, y_val = y[train_indices], y[val_indices]
+
+# Definir el modelo de regresión Ridge
+ridge = Ridge()
+
+# Definir la cuadrícula de parámetros para GridSearch
+param_grid = {
+    'alpha': [0.01, 0.1, 1.0, 10.0, 100.0]  # Regularización L2
+}
+
+# Usar GridSearchCV para buscar los mejores hiperparámetros
+grid_search = GridSearchCV(estimator=ridge, param_grid=param_grid, cv=3, scoring='neg_mean_squared_error', verbose=1, n_jobs=-1)
+grid_search.fit(X_train, y_train)
+
+# Imprimir los mejores hiperparámetros encontrados
+print("Mejores hiperparámetros:")
+print(grid_search.best_params_)
+
+# Evaluar el modelo con los mejores hiperparámetros en el conjunto de validación
+best_model = grid_search.best_estimator_
+y_pred = best_model.predict(X_val)
+mse = mean_squared_error(y_val, y_pred)
+print(f"Mean Squared Error en validación: {mse}")
+r2_tyh=best_model.score(X_val, y_val)
+print(f"R^2: {r2_tyh}")
+
+print(f'Es mejor el metodo sin considerar la humedad ya que la diferencia de R2 es a favor del primero')
+print(f'Dif. De R2={r2_solotemp-r2_tyh}')
 
 
 
